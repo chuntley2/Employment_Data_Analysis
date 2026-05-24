@@ -1,0 +1,149 @@
+---
+title: "Employment Analysis"
+author: "Colin Huntley"
+date: "2026-05-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+
+jobs_change <- read.csv("total_nonfarm_change.txt")
+jobs_total <- read.csv("total_nonfarm_total.txt")
+
+# All below files refer to the month-to-month change of the specific sector
+construction <- read.csv("construction_change.txt")
+financial <- read.csv("financial_change.txt")
+government <- read.csv("government_change.txt")
+health_services <- read.csv("health_services&private_ed_change.txt")
+hospitality <- read.csv("hospitality_change.txt")
+manufacturing <- read.csv("manufacturing_change.txt")
+oil_gas <- read.csv("oil&gas_change.txt")
+other <- read.csv("other_change.txt")
+private <- read.csv("private_change.txt")
+professional <- read.csv("professional&business_change.txt")
+retail <- read.csv("retail_change.txt")
+
+# Cleaning all datasets for use
+jobs_change <- jobs_change %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "total jobs"
+  )
+
+jobs_total <- jobs_total %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "value"
+  )
+
+construction <- construction %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "construction"
+  )
+
+financial <- financial %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "financial"
+  )
+
+government <- government %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "government"
+  )
+
+health_services <- health_services %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "health_services"
+  )
+
+hospitality <- hospitality %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "hospitality"
+  )
+
+manufacturing <- manufacturing %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "manufacturing"
+  )
+
+oil_gas <- oil_gas %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "oil_gas"
+  )
+
+other <- other %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "other"
+  )
+
+private <- private %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "private"
+  )
+
+professional <- professional %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "professional"
+  )
+
+retail <- retail %>%
+  pivot_longer(
+    cols = -Year, 
+    names_to = "month",
+    values_to = "retail"
+  )
+df_list <- list(construction, financial, government, health_services, hospitality, manufacturing, oil_gas, other, private, professional, retail)
+
+merged <- merge(jobs_change, construction) %>%
+  merge(financial) %>%
+  merge(government) %>%
+  merge(health_services) %>%
+  merge(hospitality) %>%
+  merge(manufacturing) %>%
+  merge(oil_gas) %>%
+  merge(other) %>%
+  merge(private) %>%
+  merge(professional) %>%
+  merge(retail)
+
+# Fully 
+merged
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
