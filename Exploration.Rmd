@@ -9,141 +9,197 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+All data was collected from the BLS, I just needed to load it and clean it a little bit to make the Date value work well in graphs.
 
 ```{r}
 library(tidyverse)
+library(ggplot2)
+library(lubridate)
+ 
+# Month-over-month change files. Names become the column names in the final data.
+files <- c(
+  all_jobs = "total_nonfarm_change.txt",
+  construction = "construction_change.txt",
+  financial = "financial_change.txt",
+  government = "government_change.txt",
+  health_services = "health_services&private_ed_change.txt",
+  hospitality = "hospitality_change.txt",
+  manufacturing = "manufacturing_change.txt",
+  oil_gas = "oil&gas_change.txt",
+  other = "other_change.txt",
+  private = "private_change.txt",
+  professional = "professional&business_change.txt",
+  retail = "retail_change.txt"
+)
+ 
 
-jobs_change <- read.csv("total_nonfarm_change.txt")
-jobs_total <- read.csv("total_nonfarm_total.txt")
+read_bls <- function(file, name) {
+  read.csv(file) |>
+    pivot_longer(-Year, names_to = "month", values_to = name) |>
+    mutate(Date = make_date(Year, match(month, month.abb), 1)) |>
+    select(Date, all_of(name))
+}
+ 
 
-# All below files refer to the month-to-month change of the specific sector
-construction <- read.csv("construction_change.txt")
-financial <- read.csv("financial_change.txt")
-government <- read.csv("government_change.txt")
-health_services <- read.csv("health_services&private_ed_change.txt")
-hospitality <- read.csv("hospitality_change.txt")
-manufacturing <- read.csv("manufacturing_change.txt")
-oil_gas <- read.csv("oil&gas_change.txt")
-other <- read.csv("other_change.txt")
-private <- read.csv("private_change.txt")
-professional <- read.csv("professional&business_change.txt")
-retail <- read.csv("retail_change.txt")
+merged <- imap(files, read_bls) |>
+  reduce(inner_join, by = "Date") |>
+  arrange(Date) |>
+  drop_na()
+ 
 
-# Cleaning all datasets for use
-jobs_change <- jobs_change %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "total jobs"
-  )
-
-jobs_total <- jobs_total %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "value"
-  )
-
-construction <- construction %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "construction"
-  )
-
-financial <- financial %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "financial"
-  )
-
-government <- government %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "government"
-  )
-
-health_services <- health_services %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "health_services"
-  )
-
-hospitality <- hospitality %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "hospitality"
-  )
-
-manufacturing <- manufacturing %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "manufacturing"
-  )
-
-oil_gas <- oil_gas %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "oil_gas"
-  )
-
-other <- other %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "other"
-  )
-
-private <- private %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "private"
-  )
-
-professional <- professional %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "professional"
-  )
-
-retail <- retail %>%
-  pivot_longer(
-    cols = -Year, 
-    names_to = "month",
-    values_to = "retail"
-  )
-df_list <- list(construction, financial, government, health_services, hospitality, manufacturing, oil_gas, other, private, professional, retail)
-
-merged <- merge(jobs_change, construction) %>%
-  merge(financial) %>%
-  merge(government) %>%
-  merge(health_services) %>%
-  merge(hospitality) %>%
-  merge(manufacturing) %>%
-  merge(oil_gas) %>%
-  merge(other) %>%
-  merge(private) %>%
-  merge(professional) %>%
-  merge(retail)
-
-# Fully 
+jobs_total <- read_bls("total_nonfarm_total.txt", "total_jobs")
+ 
 merged
+ 
+ggplot(merged, aes(x = Date, y = retail)) +
+  geom_line()
 ```
 
-## Including Plots
+Well the most obvious thing in this chart is the massive impact of COVID. There is also the noticeable dip around 2009 from the Financial Crisis. The first question I'll analyze is: "Was the employment for all sectors impacted equally by covid? If not, what industries were impacted the most and what industries were impacted the least?"
 
-You can also embed plots, for example:
+I'll first visualize the differences for each sector using box and whisker plots, this should give us a good understanding of how each industry changed.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+library(patchwork)
+ 
+pre_start <- as.Date("2015-03-01") 
+pre_end <- as.Date("2020-02-01")
+post_start <- as.Date("2020-07-01") 
+post_end <- as.Date("2025-06-01")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+I decided to choose the 60 months before March 2020 as the pre-COVID months as it seems like up to this point, COVID had marginal to no effect on the employment numbers. I then chose the 60 months starting with July 2020 as the post-COVID hit months. Obviously this is still during the time of COVID but I was most focused on the reaction after the initial hit, when millions of jobs were lost in an incredibly short amount of time. Including the months during COVID should still be effective for analyzing how COVID effected the employment in certain industries.
+
+```{r}
+# Needed to add a 'trim' to make the plots more readable, the highest and lowest 5% of values are removed from the box and whisker plots.
+trim <- 0.05
+ 
+# Ignored aggregate categories to focus on the specific industries.
+sectors <- setdiff(names(merged), c("Date", "all_jobs", "private"))
+
+periods <- merged |>
+  mutate(period = case_when(
+    between(Date, pre_start,  pre_end)  ~ "Pre",
+    between(Date, post_start, post_end) ~ "Post"
+  )) |>
+  filter(!is.na(period)) |>
+  mutate(period = factor(period, levels = c("Pre", "Post"))) |>
+  pivot_longer(all_of(sectors), names_to = "sector", values_to = "change")
+ 
+plot_sector <- function(data, sector_name, trim = 0.05) {
+  d <- filter(data, sector == sector_name)
+  y_limits <- quantile(d$change, c(trim, 1 - trim))
+ 
+  ggplot(d, aes(x = period, y = change, fill = period)) +
+    geom_boxplot(alpha = 0.6) +
+     #geom_violin(alpha = 0.6) +   # swap in for violins
+    coord_cartesian(ylim = y_limits) +
+    labs(title = str_to_title(str_replace_all(sector_name, "_", " ")),
+         x = NULL, y = "Change") +
+    theme_minimal() +
+    theme(legend.position = "none")
+}
+
+plot_matrix <- function(periods, title, trim = 0.05, ncol = 4) {
+  sectors <- unique(periods$sector)
+  wrap_plots(map(sectors, \(s) plot_sector(periods, s, trim)), ncol = ncol) +
+    plot_annotation(title = title, subtitle = "Change measures monthly change in   thousands")
+}
+plot_matrix(periods, "Monthly job change by sector: pre vs post COVID", trim)
+```
+ 
+We can certainly see some differences for some of the industries. In particular, it seems like Health Services had a massive increase in median employment, and Oil/Gas also seems to have a noticeable increase. It also seems like for some jobs, the median values are close together but the means for post-COVID are quite a bit different (see wider box in Hospitality, Retail, Financial). There are also some differences in the median values for Government, Financial, and Professional sectors but they're less obvious. To test which, if any, differences are statistically significant, I'll run a Wilcoxon rank-sum test to assess whether monthly job changes in each sector were different before and after COVID, using a Holm correction since I'm comparing multiple sectors. 
+  
+```{r}
+tests <- periods |>
+  group_by(sector) |>
+  summarise(
+    median_pre  = median(change[period == "Pre"]),
+    median_post = median(change[period == "Post"]),
+    p_value = wilcox.test(change[period == "Pre"],
+                          change[period == "Post"],
+                          exact = FALSE)$p.value,
+    .groups = "drop"
+  ) |>
+  mutate(p_adj = p.adjust(p_value, method = "holm")) |>
+  arrange(p_adj) |>
+  mutate(p_value = round(p_value, 5)) |>
+  mutate(p_adj = round(p_adj, 5))
+ 
+tests
+```
+
+We can see that, after the correction, only the Health Services and Oil/Gas sectors have very strong evidence of a difference. There is mediocre evidence of differences in the Financial, Government, Hospitality, and Retail sectors, and little to no evidence of differences in the Construction, Manufacturing, and Professional sectors. 
+
+Thus, the evidence points towards the Health Services and Oil/Gas sectors having the greatest impact and sectors like Construction, Manufacturing, and Professional being the least impacted.
+
+
+The next question I'll ask is: "During the months of the 2009 Financial Crisis, what sectors took the biggest hits to monthly employment?"
+
+This 
+```{r}
+windows <- list(
+  "Pre-crisis" = c("2003-12-01", "2007-11-01"),
+  "Crisis"     = c("2007-12-01", "2010-02-01")
+)
+trim <- 0.05
+ 
+sectors <- setdiff(names(merged), c("Date", "all_jobs", "private"))
+ 
+# ---- Build dataset and plot -------------------------------------------------
+build_periods <- function(data, sectors, windows) {
+  windows <- map(windows, as.Date)
+  data |>
+    mutate(period = case_when(
+      between(Date, windows[[1]][1], windows[[1]][2]) ~ names(windows)[1],
+      between(Date, windows[[2]][1], windows[[2]][2]) ~ names(windows)[2]
+    )) |>
+    filter(!is.na(period)) |>
+    mutate(period = factor(period, levels = names(windows))) |>
+    pivot_longer(all_of(sectors), names_to = "sector", values_to = "change")
+}
+
+periods <- build_periods(merged, sectors, windows)
+ 
+
+plot_matrix(periods, "Monthly job change by sector: pre-crisis vs 2008-2010 crisis", trim)
+```
+
+
+
+```{r}
+compare_periods <- function(periods, alternative = "two.sided") {
+  before <- levels(periods$period)[1]
+  after  <- levels(periods$period)[2]
+ 
+  periods |>
+    group_by(sector) |>
+    summarise(
+      median_before = median(change[period == before]),
+      median_after  = median(change[period == after]),
+      mean_before   = mean(change[period == before]),
+      mean_after    = mean(change[period == after]),
+      p_value = wilcox.test(change[period == after],
+                            change[period == before],
+                            alternative = alternative,
+                            exact = FALSE)$p.value,
+      .groups = "drop"
+    ) |>
+    mutate(p_adj = p.adjust(p_value, method = "holm"))
+}
+
+results <- compare_periods(periods, alternative = "less") |>
+  mutate(
+    # Relative to |baseline| so the sign still means "up" or "down".
+    # Unreliable when the pre-crisis value is close to zero.
+    median_pct_diff = (median_after - median_before) / abs(median_before) * 100,
+    mean_pct_diff   = (mean_after - mean_before) / abs(mean_before) * 100
+  ) |>
+  arrange(p_adj) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  select (sector, median_before, median_after, median_pct_diff, mean_before, mean_after,    mean_pct_diff, p_value, p_adj)
+  
+results
+```
+
+We can see that there is overwhelming evidence of a decrease for all sectors except for the Oil/Gas, Government, and Health Services sectors, where the evidence is much weaker and far from conclusive. The sectors with the biggest changes, by percentage to control for some sectors simply being much bigger, is the Other, Construction, Financial, Retail, and Manufacturing sectors, in order of greatest median chenge. These percentages shouldn't be taken at face value, since they are easily inflated when the values before the crisis are close to zero, but they help give the general trend about how the values during the crisis changed in relation to what they were before the crisis. The results make sense, coming into it I would have guessed the Financial, Construction, and Manufacturing sectors would have taken the biggest hits from the crisis, which seems to be generally supported in the data.
